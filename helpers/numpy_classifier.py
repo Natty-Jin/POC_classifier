@@ -16,15 +16,13 @@ import numpy as np
 
 _WHITESPACE_RE = re.compile(r"\s\s+")
 
-# ── 규칙 기반 오버라이드 ──────────────────────────────────────────────
-# 우선 사용내역은 쓸지 말지 테스트를 계속 해보면서 진행을 함. 추후에 사용에 문제가 있다면 제외 시켜야함 제외는 ### 까지
+# ── 규칙 기반 오버라이드 (현재 비활성화) ─────────────────────────────
+# "사용내역/이용가능여부"면 무조건 membership이라는 규칙이었는데,
+# "가족이랑 같이 썼는데 나도 쓸 수 있어?"처럼 여러 사람이 얽힌 사용 규칙
+# 설명이 필요한 경우까지 같이 걸려버리는 경계 문제가 있어 껐다.
+# 다시 켜려면 아래 _RULES_ENABLED 만 True로 바꾸면 된다 (로직 자체는 그대로 둠).
+_RULES_ENABLED = False
 
-# 아래 패턴에 해당하면 통계 모델(TF-IDF)을 거치지 않고 무조건 membership으로
-# 확정한다. "사용내역 조회" / "과거 사용여부 확인" / "이용가능여부 확인"은
-# 예외 없이 membership이라는 게 확정된 규칙이라, 데이터로 모델에 학습시키는
-# 것보다 규칙으로 먼저 걸러내는 편이 안정적이다.
-
-### 추후 제외 여기서부터 시작
 _ACTION_STEMS = ["사용", "이용", "썼", "쓴", "써봤"]
 _RECORD_WORDS = ["내역", "기록"]
 _AVAILABILITY_PATTERNS = [
@@ -36,7 +34,11 @@ _AVAILABILITY_REGEX = re.compile("|".join(_AVAILABILITY_PATTERNS))
 
 
 def apply_membership_rules(text: str) -> bool:
-    """사용내역/이용가능여부 확정 규칙에 해당하면 True (membership 강제)."""
+    """사용내역/이용가능여부 확정 규칙에 해당하면 True (membership 강제).
+    _RULES_ENABLED = False 인 동안은 항상 False를 반환해 모델 판단에 맡긴다."""
+    if not _RULES_ENABLED:
+        return False
+
     has_record = any(w in text for w in _RECORD_WORDS)
     has_action = any(w in text for w in _ACTION_STEMS)
     if has_record and has_action:
@@ -45,12 +47,10 @@ def apply_membership_rules(text: str) -> bool:
         return True
     if any(w in text for w in _STANDALONE_CONFIRM):
         return True
-    if re.search(r"쓴\s", text):  # "쓴 내역" 외에 "내가 쓴 거" 같은 단독 표현
+    if re.search(r"쓴\s", text):
         return True
     return False
 
-# === 아래는 우선적으로 돌려보는 곳 사용 내역과 같이 멤버십으로 무조건 분류되는 것들은 아래를 사용하지만,
-### 추후 사용되는 규칙 중 문제 생길 시 위 펑션 및 규칙 값들 제거 필요!!!!!
 
 def char_wb_ngrams(text: str, ngram_range: tuple[int, int]) -> list[str]:
     """scikit-learn CountVectorizer(analyzer='char_wb')와 동일한 토큰화.
@@ -122,6 +122,10 @@ class NumpyTfidfLogisticClassifier:
         }
 
     def classify(self, text: str) -> dict:
+        # 규칙 우선 적용 — 사용내역/이용가능여부 확정 패턴이면 모델을 아예 안 거침
+        if apply_membership_rules(text):
+            return {"category": "membership", "confidence": 1.0, "matched_rule": True}
+
         probs = self.predict_proba(text)
         best_label = max(probs, key=probs.get)
-        return {"category": best_label, "confidence": round(probs[best_label], 4)}
+        return {"category": best_label, "confidence": round(probs[best_label], 4), "matched_rule": False}
