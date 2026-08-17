@@ -1,5 +1,5 @@
 # venv 확인용
-"C:\Users\????????\.pyenv\pyenv-win\versions\3.10.11\python.exe" -m venv .venv
+"C:\Users\{경로}\.pyenv\pyenv-win\versions\3.10.11\python.exe" -m venv .venv
 
 파이썬 venv 가상 환경 해키지 관리 디렉토리는 기존에 설정한 path가 있기 때문에 라이브러리 설치가 안되는 경우가 허다함. 이럴 경우 pyenv local {원하는 버전}으로 변경해보거나 pyenv version 또는 pyenv versions를 터미널에서 확인한 후 안된다 싶으면 맨 위 명령어로 .venv 폴더를 만든다.
 
